@@ -210,6 +210,16 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::${AppStackName}-*'
                   - !Sub 'arn:aws:s3:::${AppStackName}-*/*'
+              - Sid: SmokeTestReadOnlyData
+                Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AppStackName}-*'
+              - Sid: SmokeTestReadLogs
+                Effect: Allow
+                Action: 'logs:FilterLogEvents'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AppStackName}-*'
               - Sid: InvalidateCdnCache
                 Effect: Allow
                 Action:

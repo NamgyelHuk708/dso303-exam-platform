@@ -1,0 +1,53 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # lets the job request a GitHub OIDC token (no stored AWS keys)
+  contents: read
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AWS_REGION: us-west-2
+      AWS_DEFAULT_REGION: us-west-2
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Get temporary AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Not a secret: only this repo's main branch can assume it (see infra/bootstrap.yaml)
+          role-to-assume: arn:aws:iam::363242104805:role/dso303-exam-namgyelw-github-deploy
+          role-session-name: gh-run-${{ github.run_id }}
+          aws-region: us-west-2
+
+      - name: Show the assumed identity
+        run: aws sts get-caller-identity
+
+      - name: Install SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Validate template
+        run: sam validate --lint
+
+      - name: Deploy infrastructure and Lambda code
+        run: sam deploy --no-progressbar
+
+      - name: Publish frontend
+        run: scripts/publish-frontend.sh
+
+      - name: Smoke test the live system
+        run: scripts/smoke-test.sh "ci-${{ github.run_number }}"
