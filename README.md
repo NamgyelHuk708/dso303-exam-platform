@@ -1,7 +1,5 @@
 # Online Exam and Assignment Platform on AWS
 
-**DSO303 Cloud: Assignment 2.** Namgyel Wangchuk (02230291), College of Science and Technology.
-
 ## Summary
 
 A university with 8,000 students and 400 staff is moving its exams and assignment submissions online. This repository contains the cloud architecture for that platform, a working deployment of it on AWS, and the evidence that it works.
