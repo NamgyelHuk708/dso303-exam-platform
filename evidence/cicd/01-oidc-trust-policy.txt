@@ -1,4 +1,4 @@
-Tue Nov 17 11:32:23 AM UTC 2026
+Tue Nov 17 02:28:30 PM UTC 2026
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -10,7 +10,7 @@ Tue Nov 17 11:32:23 AM UTC 2026
             "Action": "sts:AssumeRoleWithWebIdentity",
             "Condition": {
                 "StringEquals": {
-                    "token.actions.githubusercontent.com:sub": "repo:NamgyelHuk708/dso303-exam-platform:ref:refs/heads/main",
+                    "token.actions.githubusercontent.com:sub": "repo:NamgyelHuk708@141105515/dso303-exam-platform@1459121498:ref:refs/heads/main",
                     "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
                 }
             }

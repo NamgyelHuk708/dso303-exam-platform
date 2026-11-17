@@ -162,7 +162,9 @@ Resources:
             Condition:
               StringEquals:
                 'token.actions.githubusercontent.com:aud': sts.amazonaws.com
-                'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepo}:ref:refs/heads/main'
+                # GitHub's sub claim pins the owner and repo by immutable ID (owner@id/repo@id), so a
+                # renamed or re-created repo with the same name can never match this trust policy
+                'token.actions.githubusercontent.com:sub': 'repo:NamgyelHuk708@141105515/dso303-exam-platform@1459121498:ref:refs/heads/main'
       Policies:
         - PolicyName: deploy-app-stack-only
           PolicyDocument:
