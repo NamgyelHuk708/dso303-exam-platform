@@ -2,7 +2,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Online exam platform (DSO303, NamgyelW) - lean deployment of the production design.
-  Layer 1: DynamoDB (multi-AZ by design, PITR), submissions bucket with lifecycle, health API.
+  Layer 2: exam API (autosave, submit, presigned upload) and async upload notification
+  (S3 -> SQS + DLQ -> Lambda -> SNS email). DynamoDB is multi-AZ by design, PITR on.
+
+Parameters:
+  NotifyEmail:
+    Type: String
+    Description: Address that receives upload notifications (SNS email subscription)
 
 Globals:
   Function:
@@ -10,6 +16,12 @@ Globals:
     Architectures: [arm64]
     MemorySize: 256
     Timeout: 15
+  HttpApi:
+    CorsConfiguration:
+      AllowOrigins: ['*']
+      AllowMethods: [GET, PUT, POST, OPTIONS]
+      AllowHeaders: [content-type]
+      MaxAge: 600
 
 Resources:
   # ---------- Database: DynamoDB replicates across AZs automatically ----------
@@ -33,9 +45,10 @@ Resources:
         PointInTimeRecoveryEnabled: true
       DeletionProtectionEnabled: false
 
-  # ---------- File storage: submissions with 5-year lifecycle ----------
+  # ---------- File storage: submissions with 5-year lifecycle + upload events ----------
   SubmissionsBucket:
     Type: AWS::S3::Bucket
+    DependsOn: UploadQueuePolicy
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -63,6 +76,15 @@ Resources:
             Status: Enabled
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 1
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Queue: !GetAtt UploadQueue.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: submissions/
 
   SubmissionsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -82,7 +104,53 @@ Resources:
               Bool:
                 'aws:SecureTransport': 'false'
 
-  # ---------- API: health check proves Lambda -> DynamoDB write + read ----------
+  # ---------- Async: queue + dead-letter queue between S3 and the notifier ----------
+  UploadDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  UploadQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 90
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt UploadDLQ.Arn
+        maxReceiveCount: 3
+
+  UploadQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref UploadQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowOnlyOurSubmissionsBucket
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: 'sqs:SendMessage'
+            Resource: !GetAtt UploadQueue.Arn
+            Condition:
+              ArnLike:
+                'aws:SourceArn': !Sub 'arn:aws:s3:::${AWS::StackName}-submissionsbucket-*'
+              StringEquals:
+                'aws:SourceAccount': !Ref AWS::AccountId
+
+  NotificationsTopic:
+    Type: AWS::SNS::Topic
+
+  NotifyEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref NotificationsTopic
+      Protocol: email
+      Endpoint: !Ref NotifyEmail
+
+  # ---------- Compute ----------
   HealthLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -108,6 +176,79 @@ Resources:
             Path: /health
             Method: GET
 
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: api.handler
+      LoggingConfig:
+        LogGroup: !Ref ApiLogGroup
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ExamTable
+          BUCKET_NAME: !Ref SubmissionsBucket
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ExamTable
+        - Statement:
+            - Effect: Allow
+              Action: 's3:PutObject'
+              Resource: !Sub '${SubmissionsBucket.Arn}/submissions/*'
+      Events:
+        GetExam:
+          Type: HttpApi
+          Properties:
+            Path: /exam/{examId}
+            Method: GET
+        Autosave:
+          Type: HttpApi
+          Properties:
+            Path: /exam/{examId}/autosave
+            Method: PUT
+        Submit:
+          Type: HttpApi
+          Properties:
+            Path: /exam/{examId}/submit
+            Method: POST
+        UploadUrl:
+          Type: HttpApi
+          Properties:
+            Path: /upload-url
+            Method: POST
+
+  NotifierLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+
+  NotifierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: notifier.handler
+      LoggingConfig:
+        LogGroup: !Ref NotifierLogGroup
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ExamTable
+          TOPIC_ARN: !Ref NotificationsTopic
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ExamTable
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt NotificationsTopic.TopicName
+      Events:
+        Uploads:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt UploadQueue.Arn
+            BatchSize: 1
+
 Outputs:
   ApiUrl:
     Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com'
@@ -115,3 +256,9 @@ Outputs:
     Value: !Ref ExamTable
   SubmissionsBucketName:
     Value: !Ref SubmissionsBucket
+  ApiLogGroup:
+    Value: !Ref ApiLogGroup
+  NotifierLogGroup:
+    Value: !Ref NotifierLogGroup
+  UploadDLQUrl:
+    Value: !Ref UploadDLQ

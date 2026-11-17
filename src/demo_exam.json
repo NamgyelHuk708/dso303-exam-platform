@@ -1,0 +1,15 @@
+{
+  "examId": "demo",
+  "title": "DSO303 Demo Quiz - Cloud Exam Platform",
+  "durationMinutes": 20,
+  "questions": [
+    {"id": "q1", "type": "mcq", "text": "Where are assignment files stored in this platform?",
+     "options": {"A": "Amazon S3", "B": "Amazon EBS", "C": "The Lambda /tmp folder", "D": "DynamoDB"}},
+    {"id": "q2", "type": "mcq", "text": "What does an SQS dead-letter queue hold?",
+     "options": {"A": "Messages waiting for their first delivery", "B": "Messages that failed processing several times", "C": "Deleted messages", "D": "Encrypted messages only"}},
+    {"id": "q3", "type": "mcq", "text": "How many Availability Zones can this design lose and keep running?",
+     "options": {"A": "None", "B": "One", "C": "All of them", "D": "It only runs in one AZ"}},
+    {"id": "q4", "type": "short", "text": "In one sentence: why do uploads go straight to S3 with a presigned URL instead of through the API?"}
+  ],
+  "answerKey": {"q1": "A", "q2": "B", "q3": "B"}
+}

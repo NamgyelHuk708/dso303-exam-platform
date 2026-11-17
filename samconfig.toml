@@ -12,3 +12,4 @@ capabilities = "CAPABILITY_IAM"
 confirm_changeset = false
 fail_on_empty_changeset = false
 tags = "owner=\"NamgyelW\" project=\"dso303-exam\""
+parameter_overrides = "NotifyEmail=02230291.cst@rub.edu.bt"

@@ -1,0 +1,5 @@
+Tue Nov 17 01:42:54 PM UTC 2026
+Dead-letter queue: https://sqs.us-west-2.amazonaws.com/363242104805/dso303-exam-namgyelw-app-UploadDLQ-UG8pf9ZrwVs7
+{
+    "ApproximateNumberOfMessages": "0"
+}

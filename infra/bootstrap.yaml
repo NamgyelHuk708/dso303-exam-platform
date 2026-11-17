@@ -114,6 +114,13 @@ Resources:
                   - 's3:GetObject'
                   - 's3:GetObjectVersion'
                 Resource: !Sub '${ArtifactBucket.Arn}/*'
+              - Sid: TagEventSourceMappings
+                Effect: Allow
+                Action:
+                  - 'lambda:TagResource'
+                  - 'lambda:UntagResource'
+                  - 'lambda:ListTags'
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:event-source-mapping:*'
               - Sid: CreateOnlyAppRoles
                 Effect: Allow
                 Action:
