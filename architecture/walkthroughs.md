@@ -15,7 +15,8 @@ Region: **ap-south-1 (Mumbai)** for production, the nearest AWS region to the un
 | API | Regional, multi-AZ by AWS | API Gateway HTTP API with a Cognito JWT authorizer |
 | Network: public subnets | **AZ-a** `10.0.0.0/24`, **AZ-b** `10.0.1.0/24` | One NAT gateway in each; internet gateway attached to the VPC |
 | Compute: private app subnets | **AZ-a** `10.0.10.0/24`, **AZ-b** `10.0.11.0/24` | Lambda functions (exam API and autosave, upload-URL issuer, MCQ marking worker, upload notifier, results emailer), attached to **both** subnets |
-| Network: private endpoint subnets | **AZ-a** `10.0.20.0/24`, **AZ-b** `10.0.21.0/24` | Interface VPC endpoints (one network interface per AZ) for SQS, SNS, Secrets Manager, KMS, CloudWatch Logs; gateway endpoints for S3 and DynamoDB on the private route tables |
+| Network: private endpoint subnets | **AZ-a** `10.0.20.0/24`, **AZ-b** `10.0.21.0/24` | Interface VPC endpoints (one network interface per AZ) for SQS, SNS, Secrets Manager, KMS, CloudWatch Logs |
+| Network: VPC level (no subnet) | Regional; route-table targets on both private route tables | Gateway endpoints for S3 and DynamoDB (no network interface, so an AZ failure does not affect them) |
 | Data | Regional, replicated across AZs by AWS; reached **only** through the gateway endpoints | DynamoDB table (on-demand, PITR, KMS); S3 submissions bucket (SSE-KMS, versioning, Object Lock, lifecycle IA 30 d, Glacier 180 d, expire 1,825 d) |
 | Async | Regional, multi-AZ by AWS | SQS marking queue and upload queue, each with a dead-letter queue; SNS topics (tutor notifications, alarms); SES (student emails); EventBridge Scheduler (exam open, close, results release) |
 | Security | Regional | KMS customer-managed keys, Secrets Manager, IAM roles (one per function, GitHub OIDC deploy role), GuardDuty with Malware Protection for S3 |

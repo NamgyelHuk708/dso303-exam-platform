@@ -10,3 +10,4 @@ __pycache__/
 credentials*
 *.pem
 *.key
+.Rhistory
