@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Online exams - DSO303 demo</title>
+<style>
+:root{--paper:#f3f6f1;--ink:#1d3328;--muted:#56695d;--line:#c9d6cc;--sheet:#ffffff;--accent:#2f6b4f;--warn:#a86400;--bad:#b3261e;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--paper:#121a16;--ink:#e3ece6;--muted:#9db3a5;--line:#2c3b33;--sheet:#18221d;--accent:#7cc39e;--warn:#e0a54a;--bad:#f2867e;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.bar{position:sticky;top:0;z-index:1;display:flex;gap:1rem;align-items:center;justify-content:space-between;padding:.7rem 1.25rem;background:var(--ink);color:var(--paper)}
+.timer{font-variant-numeric:tabular-nums;font-size:1.35rem;font-weight:700}
+.timer.low{color:#ffcf7a}
+.save{font-size:.92rem;text-align:right}
+main{max-width:46rem;margin:0 auto;padding:1.5rem 1.25rem 3rem}
+h1{font-size:1.6rem;line-height:1.2;margin:.2rem 0 .8rem}
+h2{font-size:1.15rem;margin:0 0 .4rem}
+section{background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:1.1rem 1.25rem;margin:1rem 0}
+.q p{margin:0 0 .6rem;font-weight:600}
+label.opt{display:flex;gap:.6rem;align-items:flex-start;padding:.35rem .4rem;border-radius:4px;cursor:pointer}
+label.opt:hover{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+textarea,input[type=text]{width:100%;font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:4px;padding:.55rem .65rem}
+textarea{min-height:5.5rem;resize:vertical}
+.row{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}
+.row input[type=text]{flex:1;min-width:12rem;width:auto}
+button{font:inherit;font-weight:600;border:0;border-radius:4px;padding:.6rem 1.1rem;background:var(--accent);color:var(--sheet);cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+.note{color:var(--muted);font-size:.92rem}
+progress{width:100%;margin-top:.6rem}
+footer{color:var(--muted);font-size:.8rem;text-align:center;padding:1rem}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="bar" id="bar" hidden>
+  <span class="timer" id="timer" aria-label="Time left">--:--</span>
+  <span class="save" id="save" role="status" aria-live="polite">Not saved yet</span>
+</div>
+<main>
+  <section id="signin">
+    <h1>Online exams and assignments</h1>
+    <p class="note">Demo of the DSO303 exam platform. In production you would sign in with your university account; for this demo, enter a student ID.</p>
+    <div class="row">
+      <input type="text" id="student" placeholder="Student ID, for example s0291-demo" aria-label="Student ID" maxlength="40">
+      <button id="start">Start exam</button>
+    </div>
+    <p id="signin-msg" class="note"></p>
+  </section>
+
+  <div id="exam" hidden>
+    <h1 id="title"></h1>
+    <p class="note">Your answers save automatically every 30 seconds. If you refresh the page, you carry on where you left off.</p>
+    <div id="questions"></div>
+    <div class="row"><button id="submit">Submit answers</button><span id="submit-msg" class="note"></span></div>
+  </div>
+
+  <section id="upload" hidden>
+    <h2>Upload an assignment</h2>
+    <p class="note">PDF or ZIP, up to 50 MB. The file goes straight to secure storage, and your tutor is emailed.</p>
+    <div class="row"><input type="file" id="file" accept=".pdf,.zip,application/pdf,application/zip"><button id="send">Upload file</button></div>
+    <progress id="progress" max="100" value="0" hidden></progress>
+    <p id="upload-msg" class="note"></p>
+  </section>
+</main>
+<footer id="version"></footer>
+<script src="config.js"></script>
+<script>
+const cfg = window.APP_CONFIG || {};
+const API = (cfg.apiUrl || "").replace(/\/$/, "");
+const $ = id => document.getElementById(id);
+$("version").textContent = "Version " + (cfg.version || "unknown");
+let student = "", exam = null, dirty = false, lastSaved = null, deadline = 0, submitted = false;
+
+async function api(method, path, body) {
+  const res = await fetch(API + path, {
+    method,
+    headers: body ? {"content-type": "application/json"} : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+  return data;
+}
+
+function answers() {
+  const out = {};
+  for (const q of exam.questions) {
+    if (q.type === "mcq") {
+      const c = document.querySelector(`input[name="${q.id}"]:checked`);
+      if (c) out[q.id] = c.value;
+    } else {
+      const t = $("ans-" + q.id).value.trim();
+      if (t) out[q.id] = t;
+    }
+  }
+  return out;
+}
+
+function showSave(text) {
+  $("save").textContent = text || (dirty
+    ? "Unsaved changes" + (lastSaved ? ` (last saved ${lastSaved})` : "")
+    : (lastSaved ? `All changes saved at ${lastSaved}` : "Not saved yet"));
+}
+
+function render(saved) {
+  $("title").textContent = exam.title;
+  const box = $("questions");
+  box.innerHTML = "";
+  exam.questions.forEach((q, i) => {
+    const s = document.createElement("section");
+    s.className = "q";
+    const p = document.createElement("p");
+    p.textContent = `${i + 1}. ${q.text}`;
+    s.append(p);
+    if (q.type === "mcq") {
+      for (const [k, v] of Object.entries(q.options)) {
+        const l = document.createElement("label");
+        l.className = "opt";
+        const r = document.createElement("input");
+        r.type = "radio"; r.name = q.id; r.value = k; r.checked = saved[q.id] === k;
+        l.append(r, document.createTextNode(`${k}. ${v}`));
+        s.append(l);
+      }
+    } else {
+      const t = document.createElement("textarea");
+      t.id = "ans-" + q.id; t.value = saved[q.id] || ""; t.setAttribute("aria-label", q.text);
+      s.append(t);
+    }
+    box.append(s);
+  });
+  box.addEventListener("input", () => { dirty = true; showSave(); });
+}
+
+async function autosave() {
+  if (!exam || submitted || !dirty) return;
+  dirty = false;
+  try {
+    const r = await api("PUT", "/exam/demo/autosave", {studentId: student, answers: answers()});
+    lastSaved = new Date(r.savedAt).toLocaleTimeString();
+    showSave();
+  } catch (e) {
+    dirty = true;
+    showSave("Save failed, retrying in 30 s (" + e.message + ")");
+  }
+}
+
+function tick() {
+  const left = Math.max(0, deadline - Date.now());
+  const m = Math.floor(left / 60000), s = Math.floor((left % 60000) / 1000);
+  $("timer").textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  $("timer").classList.toggle("low", left < 5 * 60000);
+  if (left === 0) submit();
+}
+
+async function submit() {
+  if (submitted || $("submit").disabled) return;
+  $("submit").disabled = true;
+  $("submit-msg").textContent = "Submitting...";
+  try {
+    const r = await api("POST", "/exam/demo/submit", {studentId: student, answers: answers()});
+    submitted = true; dirty = false;
+    $("submit-msg").textContent = `Submitted. Multiple-choice score: ${r.mcqScore} of ${r.mcqTotal}. Written answers: ${r.shortAnswers}.`;
+    showSave("Submitted");
+    document.querySelectorAll("#questions input, #questions textarea").forEach(el => el.disabled = true);
+  } catch (e) {
+    $("submit-msg").textContent = "Submit failed (" + e.message + "). Your answers are still saved; try again.";
+    $("submit").disabled = false;
+  }
+}
+$("submit").onclick = submit;
+
+$("start").onclick = async () => {
+  student = $("student").value.trim();
+  const msg = $("signin-msg");
+  if (!/^[A-Za-z0-9-]{1,40}$/.test(student)) { msg.textContent = "Use letters, numbers and hyphens only, up to 40 characters."; return; }
+  if (!API) { msg.textContent = "This page has no API address (config.js is missing). Publish it with scripts/publish-frontend.sh."; return; }
+  $("start").disabled = true;
+  msg.textContent = "Loading exam...";
+  try {
+    exam = await api("GET", `/exam/demo?studentId=${encodeURIComponent(student)}`);
+    const saved = exam.saved.answers || {};
+    render(saved);
+    if (exam.saved.savedAt) lastSaved = new Date(exam.saved.savedAt).toLocaleTimeString();
+    $("signin").hidden = true; $("exam").hidden = false; $("upload").hidden = false; $("bar").hidden = false;
+    deadline = Date.now() + exam.durationMinutes * 60000;
+    tick();
+    setInterval(tick, 1000);
+    setInterval(autosave, 30000);
+    showSave(exam.saved.savedAt ? `Resumed: answers saved at ${lastSaved} restored` : null);
+  } catch (e) {
+    msg.textContent = "Could not load the exam (" + e.message + "). Check the student ID and try again.";
+    $("start").disabled = false;
+  }
+};
+
+$("send").onclick = async () => {
+  const f = $("file").files[0], msg = $("upload-msg");
+  if (!f) { msg.textContent = "Choose a PDF or ZIP file first."; return; }
+  if (!/\.(pdf|zip)$/i.test(f.name)) { msg.textContent = "Only .pdf or .zip files can be uploaded."; return; }
+  if (f.size > 50 * 1024 * 1024) { msg.textContent = "That file is over 50 MB. Compress it or split it, then try again."; return; }
+  $("send").disabled = true;
+  msg.textContent = "Preparing upload...";
+  try {
+    const p = await api("POST", "/upload-url", {studentId: student, filename: f.name});
+    const form = new FormData();
+    for (const [k, v] of Object.entries(p.fields)) form.append(k, v);
+    form.append("file", f);  // S3 requires the file to be the last field
+    await new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open("POST", p.url);
+      x.upload.onprogress = e => {
+        if (e.lengthComputable) { $("progress").hidden = false; $("progress").value = Math.round(e.loaded / e.total * 100); }
+      };
+      x.onload = () => (x.status === 204 || x.status === 200) ? resolve() : reject(new Error("storage returned HTTP " + x.status));
+      x.onerror = () => reject(new Error("network error"));
+      x.send(form);
+    });
+    msg.textContent = `Uploaded ${f.name} (${(f.size / 1048576).toFixed(1)} MB). Your tutor will be emailed shortly.`;
+  } catch (e) {
+    msg.textContent = "Upload failed (" + e.message + "). Try again.";
+  } finally {
+    $("send").disabled = false;
+  }
+};
+
+window.addEventListener("beforeunload", e => {
+  if (dirty && !submitted) { autosave(); e.preventDefault(); }
+});
+</script>
+</body>
+</html>
