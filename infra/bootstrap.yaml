@@ -1,0 +1,209 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Bootstrap for dso303-exam-platform (NamgyelW). Deployed once by hand.
+  SAM artifact bucket, CloudFormation execution role (scoped to the app stack's
+  resources) and GitHub Actions deploy role (OIDC, main branch only).
+  Reuses the account's existing GitHub OIDC provider - never creates or deletes it.
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Default: NamgyelHuk708/dso303-exam-platform
+  AppStackName:
+    Type: String
+    Default: dso303-exam-namgyelw-app
+  OidcProviderArn:
+    Type: String
+    Default: arn:aws:iam::363242104805:oidc-provider/token.actions.githubusercontent.com
+
+Resources:
+  # --- 1. Where sam deploy uploads packaged code --------------------------------
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-build-artifacts
+            Status: Enabled
+            ExpirationInDays: 3
+
+  ArtifactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ArtifactBucket.Arn
+              - !Sub '${ArtifactBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+  # --- 2. The role CloudFormation uses to build the app stack -------------------
+  CfnExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: dso303-exam-namgyelw-cfn-exec
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: app-stack-resources-only
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AppNamedResources
+                Effect: Allow
+                Action:
+                  - 'lambda:*'
+                  - 'dynamodb:*'
+                  - 'sqs:*'
+                  - 'sns:*'
+                  - 's3:*'
+                  - 'logs:*'
+                Resource:
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AppStackName}-*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AppStackName}-*'
+                  - !Sub 'arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AppStackName}-*'
+                  - !Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${AppStackName}-*'
+                  - !Sub 'arn:aws:s3:::${AppStackName}-*'
+                  - !Sub 'arn:aws:s3:::${AppStackName}-*/*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AppStackName}-*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AppStackName}-*'
+              - Sid: ServicesWithoutPredictableNames
+                Effect: Allow
+                Action:
+                  - 'apigateway:*'
+                  - 'cloudfront:*'
+                  - 'lambda:CreateEventSourceMapping'
+                  - 'lambda:GetEventSourceMapping'
+                  - 'lambda:UpdateEventSourceMapping'
+                  - 'lambda:DeleteEventSourceMapping'
+                  - 'lambda:ListEventSourceMappings'
+                  - 'logs:DescribeLogGroups'
+                Resource: '*'
+              - Sid: CreateOnlyAppRoles
+                Effect: Allow
+                Action:
+                  - 'iam:CreateRole'
+                  - 'iam:DeleteRole'
+                  - 'iam:GetRole'
+                  - 'iam:TagRole'
+                  - 'iam:UntagRole'
+                  - 'iam:UpdateAssumeRolePolicy'
+                  - 'iam:PutRolePolicy'
+                  - 'iam:GetRolePolicy'
+                  - 'iam:DeleteRolePolicy'
+                  - 'iam:AttachRolePolicy'
+                  - 'iam:DetachRolePolicy'
+                  - 'iam:ListRolePolicies'
+                  - 'iam:ListAttachedRolePolicies'
+                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AppStackName}-*'
+              - Sid: PassAppRolesToLambdaOnly
+                Effect: Allow
+                Action: 'iam:PassRole'
+                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AppStackName}-*'
+                Condition:
+                  StringEquals:
+                    'iam:PassedToService': lambda.amazonaws.com
+
+  # --- 3. The role GitHub Actions assumes via OIDC (no keys) --------------------
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: dso303-exam-namgyelw-github-deploy
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref OidcProviderArn
+            Action: 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+                'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepo}:ref:refs/heads/main'
+      Policies:
+        - PolicyName: deploy-app-stack-only
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ManageOnlyTheAppStack
+                Effect: Allow
+                Action: 'cloudformation:*'
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AppStackName}/*'
+              - Sid: UseSamTransform
+                Effect: Allow
+                Action: 'cloudformation:CreateChangeSet'
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31'
+              - Sid: ReadOnlyCfnCalls
+                Effect: Allow
+                Action:
+                  - 'cloudformation:ValidateTemplate'
+                  - 'cloudformation:GetTemplateSummary'
+                  - 'cloudformation:ListStacks'
+                Resource: '*'
+              - Sid: PassOnlyTheExecutionRole
+                Effect: Allow
+                Action: 'iam:PassRole'
+                Resource: !GetAtt CfnExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    'iam:PassedToService': cloudformation.amazonaws.com
+              - Sid: UploadBuildArtifacts
+                Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                Resource:
+                  - !GetAtt ArtifactBucket.Arn
+                  - !Sub '${ArtifactBucket.Arn}/*'
+              - Sid: SyncFrontendFiles
+                Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AppStackName}-*'
+                  - !Sub 'arn:aws:s3:::${AppStackName}-*/*'
+              - Sid: InvalidateCdnCache
+                Effect: Allow
+                Action:
+                  - 'cloudfront:CreateInvalidation'
+                  - 'cloudfront:GetInvalidation'
+                Resource: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/*'
+
+Outputs:
+  ArtifactBucketName:
+    Value: !Ref ArtifactBucket
+  CfnExecutionRoleArn:
+    Value: !GetAtt CfnExecutionRole.Arn
+  GitHubDeployRoleArn:
+    Value: !GetAtt GitHubDeployRole.Arn
