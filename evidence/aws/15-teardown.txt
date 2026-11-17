@@ -1,0 +1,35 @@
+Caller: arn:aws:iam::363242104805:user/NamgyelW   region: us-west-2
+Type DELETE to remove dso303-exam-namgyelw-app and dso303-exam-namgyelw-bootstrap: == 1. App stack
+{
+    "BucketArn": "arn:aws:s3:::dso303-exam-namgyelw-app-submissionsbucket-ccxirnshcqq8",
+    "BucketRegion": "us-west-2",
+    "AccessPointAlias": false
+}
+  emptying s3://dso303-exam-namgyelw-app-submissionsbucket-ccxirnshcqq8
+{
+    "BucketArn": "arn:aws:s3:::dso303-exam-namgyelw-app-frontendbucket-wqetjabgc9f3",
+    "BucketRegion": "us-west-2",
+    "AccessPointAlias": false
+}
+  emptying s3://dso303-exam-namgyelw-app-frontendbucket-wqetjabgc9f3
+  deleting dso303-exam-namgyelw-app (CloudFront makes this take about 5-15 minutes)
+  dso303-exam-namgyelw-app deleted
+== 2. Bootstrap stack
+{
+    "BucketArn": "arn:aws:s3:::dso303-exam-namgyelw-bootstrap-artifactbucket-d2ispl6g46qa",
+    "BucketRegion": "us-west-2",
+    "AccessPointAlias": false
+}
+  emptying s3://dso303-exam-namgyelw-bootstrap-artifactbucket-d2ispl6g46qa
+  deleting dso303-exam-namgyelw-bootstrap (the shared GitHub OIDC provider is not part of it)
+  dso303-exam-namgyelw-bootstrap deleted
+
+== 3. Leftover check - every list below should be empty
+-- live stacks:
+-- log groups:
+-- CloudFront distributions for this app:
+-- IAM roles:
+-- resources tagged owner=NamgyelW (the tag index can lag a few minutes behind deletions):
+arn:aws:lambda:us-west-2:363242104805:event-source-mapping:03deeb7e-0997-413a-8fb8-7a2328f7136c
+
+Done. Left in place on purpose: the account's GitHub OIDC provider (shared with classmates).
