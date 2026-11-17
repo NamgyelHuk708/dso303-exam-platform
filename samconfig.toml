@@ -1,0 +1,14 @@
+version = 0.1
+
+[default.global.parameters]
+stack_name = "dso303-exam-namgyelw-app"
+
+[default.deploy.parameters]
+region = "us-west-2"
+s3_bucket = "dso303-exam-namgyelw-bootstrap-artifactbucket-d2ispl6g46qa"
+s3_prefix = "app"
+role_arn = "arn:aws:iam::363242104805:role/dso303-exam-namgyelw-cfn-exec"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+fail_on_empty_changeset = false
+tags = "owner=\"NamgyelW\" project=\"dso303-exam\""

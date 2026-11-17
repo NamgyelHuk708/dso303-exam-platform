@@ -1,0 +1,6 @@
+Tue Nov 17 11:32:18 AM UTC 2026
+{
+    "UserId": "AIDAVJEXKU7S772ACKFTL",
+    "Account": "363242104805",
+    "Arn": "arn:aws:iam::363242104805:user/NamgyelW"
+}

@@ -1,0 +1,30 @@
+Tue Nov 17 11:32:20 AM UTC 2026
+{
+    "Stack": "dso303-exam-namgyelw-bootstrap",
+    "Status": "CREATE_COMPLETE",
+    "Created": "2026-11-17T11:27:23.828Z",
+    "Tags": [
+        {
+            "Key": "owner",
+            "Value": "NamgyelW"
+        },
+        {
+            "Key": "project",
+            "Value": "dso303-exam"
+        }
+    ],
+    "Outputs": [
+        {
+            "OutputKey": "ArtifactBucketName",
+            "OutputValue": "dso303-exam-namgyelw-bootstrap-artifactbucket-d2ispl6g46qa"
+        },
+        {
+            "OutputKey": "CfnExecutionRoleArn",
+            "OutputValue": "arn:aws:iam::363242104805:role/dso303-exam-namgyelw-cfn-exec"
+        },
+        {
+            "OutputKey": "GitHubDeployRoleArn",
+            "OutputValue": "arn:aws:iam::363242104805:role/dso303-exam-namgyelw-github-deploy"
+        }
+    ]
+}

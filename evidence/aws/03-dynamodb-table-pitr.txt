@@ -1,0 +1,23 @@
+Tue Nov 17 01:00:21 PM UTC 2026
+{
+    "Name": "dso303-exam-namgyelw-app-ExamTable-1VXCEJNYBBXN4",
+    "Status": "ACTIVE",
+    "Billing": "PAY_PER_REQUEST",
+    "Keys": [
+        {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+        },
+        {
+            "AttributeName": "sk",
+            "KeyType": "RANGE"
+        }
+    ],
+    "DeletionProtection": false
+}
+{
+    "PointInTimeRecoveryStatus": "ENABLED",
+    "RecoveryPeriodInDays": 35,
+    "EarliestRestorableDateTime": 1794920333.0,
+    "LatestRestorableDateTime": 1794920333.0
+}

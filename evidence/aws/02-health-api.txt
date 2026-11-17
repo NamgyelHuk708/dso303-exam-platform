@@ -1,0 +1,3 @@
+Tue Nov 17 01:00:20 PM UTC 2026
+GET https://istgwcwpwc.execute-api.us-west-2.amazonaws.com/health
+{"status": "ok", "table": "dso303-exam-namgyelw-app-ExamTable-1VXCEJNYBBXN4", "hits": 3, "last_check": "2026-11-17T13:00:21.560588+00:00", "region": "us-west-2"}

@@ -104,6 +104,16 @@ Resources:
                   - 'lambda:ListEventSourceMappings'
                   - 'logs:DescribeLogGroups'
                 Resource: '*'
+              - Sid: RunTheSamTransform
+                Effect: Allow
+                Action: 'cloudformation:CreateChangeSet'
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31'
+              - Sid: ReadPackagedCodeForLambda
+                Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                Resource: !Sub '${ArtifactBucket.Arn}/*'
               - Sid: CreateOnlyAppRoles
                 Effect: Allow
                 Action:
