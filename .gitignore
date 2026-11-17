@@ -1,0 +1,12 @@
+# SAM build output (generated)
+.aws-sam/
+# Python
+__pycache__/
+*.pyc
+.venv/
+# Never commit credentials or local env files
+.env
+*.env
+credentials*
+*.pem
+*.key
